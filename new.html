@@ -1,0 +1,174 @@
+
+<!--By Erik Kim, Mar 26, 2024-->
+<!DOCTYPE HTML>
+<html>
+<head>
+  <link rel="stylesheet" href="/css/bootstrap.css">
+  <title>Ants</title>
+</head>
+<body>
+  <h1 class="text-center">Ants Colony Simulation v 1.0.0.1</h1>
+  <div class="text-center"><button id="Infobutton" type="button" class="btn btn-dark">Info</button></div>
+  <div id="container"></div>
+  <div id="foodCounter" style="position: absolute; top: 0; left: 0; margin: 10px; font-size: 20px; color: black;"></div>
+  <div id="updatelog" style="position: absolute; top: 0; right: 0; margin: 10px; font-size: 20px; color: black;">Updates coming soon!</div>
+  <script src="js/bootstrap.js"></script>
+  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+  <script defer="defer">
+    document.getElementById('Infobutton').onclick = function() {
+      alert('Hello!!! Click anywhere on the screen to drop food, and watch as the ants navigate towards the food sources. The ants use a combination of random exploration and attraction to nearby food to find their targets. Once an ant reaches a piece of food, it will return to the colony, satisfied that it has collected the food. The number of successful food collections is displayed at the top left corner of the screen. This simulation aims to mimic some aspects of ant foraging behavior, including their ability to search for and gather food. Experiment by placing food at different locations and observe how the ants adjust their paths to reach their goals. Its still very much in the prototype stage but I hope you enjoy the simulation and learn about the very invigorating world of ants!');
+    };
+    //constants are declared here
+    const WIDTH = 2000;
+    const HEIGHT = 1000;
+    const ANTS = 50;
+    const COLONY_X = WIDTH / 2;
+    const COLONY_Y = HEIGHT / 2;
+    const COLONY_RADIUS = 50;
+
+    //stage
+    const stage = new Konva.Stage({
+      container: 'container',
+      width: WIDTH,
+      height: HEIGHT
+    });
+
+    const antLayer = new Konva.Layer();
+    const pheromoneLayer = new Konva.Layer();
+    const uiLayer = new Konva.Layer();
+    let antsBroughtFood = 0;
+
+    function updateFoodCounter() {
+      document.getElementById('foodCounter').innerText = 'Food brought back: ' + antsBroughtFood;
+    }
+
+
+    stage.add(pheromoneLayer);
+    stage.add(antLayer);
+    stage.add(uiLayer);
+
+    let ants = [];
+    let foods = [];
+    function drawColony() {
+      let colony = new Konva.Circle({
+        x: COLONY_X,
+        y: COLONY_Y,
+        radius: COLONY_RADIUS,
+        fill: 'grey',
+        stroke: 'black',
+        strokeWidth: 4
+      });
+      uiLayer.add(colony);
+      uiLayer.draw();
+    }
+    //initialize ants
+    function initAnts() {
+      for (let i = 0; i < ANTS; i++) {
+        let ant = new Konva.Circle({
+          x: Math.random() * WIDTH,
+          y: Math.random() * HEIGHT,
+          radius: 5,
+          fill: 'brown',
+        });
+        ants.push({ shape: ant, angle: Math.random() * 360, mode: 0 });
+        antLayer.add(ant);
+      }
+    }
+
+    function initSimulation() {
+      initAnts();
+      drawColony();
+      updateFoodCounter();
+    }
+
+    function updateAnts() {
+      ants.forEach(ant => {
+        if (ant.mode === 0)  { //searching
+          ant.shape.fill('brown');
+          const speed = 5;
+          ant.angle += (Math.random() - 0.5) * 20;
+          ant.shape.x(ant.shape.x() + Math.cos(ant.angle * Math.PI / 180) * speed);
+          ant.shape.y(ant.shape.y() + Math.sin(ant.angle * Math.PI / 180) * speed);
+          let closestFood = null;
+          let closestDistance = Infinity;
+
+          foods.forEach(food => {
+            const distance = Math.sqrt(Math.pow(ant.shape.x() - food.x(), 2) + Math.pow(ant.shape.y() - food.y(), 2));
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestFood = food;
+            }
+          });
+
+          if (closestFood && closestDistance < 200) {
+            const attractionStrength = 0.8; //adjust if you want
+            const angleToFood = Math.atan2(closestFood.y() - ant.shape.y(), closestFood.x() - ant.shape.x());
+            const adjustedAngle = ant.angle * Math.PI / 180 * (1 - attractionStrength) + angleToFood * attractionStrength;
+
+            ant.angle = adjustedAngle * 180 / Math.PI;
+          }
+        } else if (ant.mode === 1) { //going back home
+          const speed = 5;
+          const angleToColony = Math.atan2(COLONY_Y - ant.shape.y(), COLONY_X - ant.shape.x());
+          ant.shape.x(ant.shape.x() + Math.cos(angleToColony) * speed);
+          ant.shape.y(ant.shape.y() + Math.sin(angleToColony) * speed);
+          ant.shape.fill('black');
+
+          if (Math.sqrt(Math.pow(ant.shape.x() - COLONY_X, 2) + Math.pow(ant.shape.y() - COLONY_Y, 2
+          )) <= COLONY_RADIUS) {
+            ant.mode = 0; 
+            antsBroughtFood += 1;
+            updateFoodCounter();
+          }
+        }
+
+        if (ant.shape.x() > WIDTH) ant.shape.x(0);
+        if (ant.shape.x() < 0) ant.shape.x(WIDTH);
+        if (ant.shape.y() > HEIGHT) ant.shape.y(0);
+        if (ant.shape.y() < 0) ant.shape.y(HEIGHT);
+
+        foods.forEach(food => {
+          if (Math.sqrt(Math.pow(ant.shape.x() - food.x(), 2) + Math.pow(ant.shape.y() - food.y(), 2)) <= (ant.shape.radius() + food.radius())) {
+            food.remove();
+            const index = foods.indexOf(food);
+            if(index !== -1) {
+              foods.splice(index, 1);
+            }
+            ant.mode = 1;
+          }
+        });
+      });
+    }
+
+    function addFood(x, y) {
+      let food = new Konva.Circle({
+        x: x,
+        y: y,
+        radius: 10,
+        fill: 'green',
+      });
+      foods.push(food);
+      pheromoneLayer.add(food);
+    }
+
+    stage.on('mousedown', function (e) {
+      if (e.evt.button === 0) {
+        addFood(e.evt.layerX, e.evt.layerY);
+      }
+    });
+
+    initSimulation();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      updateAnts(); 
+      antLayer.draw();
+      pheromoneLayer.draw();
+      uiLayer.draw();
+    }
+
+    animate();
+  </script>
+</body>
+</html>
+
